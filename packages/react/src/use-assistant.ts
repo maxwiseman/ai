@@ -150,7 +150,7 @@ export function useAssistant({
       abortControllerRef.current = abortController;
 
       const actualFetch = fetch ?? getOriginalFetch();
-      const response = await actualFetch(api, {
+      const requestInit: RequestInit = {
         method: 'POST',
         credentials,
         signal: abortController.signal,
@@ -164,7 +164,15 @@ export function useAssistant({
           // optional request data:
           data: requestOptions?.data,
         }),
-      });
+      };
+
+      // initial request
+      let response = await actualFetch(api, requestInit);
+
+      // If unauthorized, retry once to support BotID cookie challenge flows
+      if (response.status === 401) {
+        response = await actualFetch(api, requestInit);
+      }
 
       if (!response.ok) {
         throw new Error(

@@ -48,7 +48,7 @@ export async function callCompletionApi({
     // Empty the completion immediately.
     setCompletion('');
 
-    const response = await fetch(api, {
+    const requestInit: RequestInit = {
       method: 'POST',
       body: JSON.stringify({
         prompt,
@@ -60,9 +60,18 @@ export async function callCompletionApi({
         ...headers,
       },
       signal: abortController.signal,
-    }).catch(err => {
+    };
+
+    let response = await fetch(api, requestInit).catch(err => {
       throw err;
     });
+
+    // Retry once on unauthorized to support BotID cookie challenge flows
+    if (response.status === 401) {
+      response = await fetch(api, requestInit).catch(err => {
+        throw err;
+      });
+    }
 
     if (onResponse) {
       try {

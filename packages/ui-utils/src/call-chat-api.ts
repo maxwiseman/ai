@@ -40,19 +40,37 @@ export async function callChatApi({
   fetch: ReturnType<typeof getOriginalFetch> | undefined;
   lastMessage: UIMessage | undefined;
 }) {
-  const response = await fetch(api, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    signal: abortController?.()?.signal,
-    credentials,
-  }).catch(err => {
+  const doRequest = async (): Promise<Response> =>
+    fetch(api, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      signal: abortController?.()?.signal,
+      credentials,
+    });
+
+  // initial request
+  let response: Response;
+  try {
+    response = await doRequest();
+  } catch (err) {
     restoreMessagesOnFailure();
     throw err;
-  });
+  }
+
+  // If unauthorized, retry once. This supports BotID-style first-call challenge flows
+  // where cookies/headers may be set on the first response and included on retry.
+  if (response.status === 401) {
+    try {
+      response = await doRequest();
+    } catch (err) {
+      restoreMessagesOnFailure();
+      throw err;
+    }
+  }
 
   if (onResponse) {
     try {
